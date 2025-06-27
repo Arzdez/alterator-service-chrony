@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# Samba active directory provision
+# Tool for provision samba active directory
+#
+# Copyright (C) 2024 Evgenii Sozonov <arzdez@altlinux.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# shellcheck disable=SC2034
+# shellcheck disable=SC1091
+# shellcheck disable=SC2086
+# shellcheck disable=SC2317
+# shellcheck disable=SC3037
+
+set -euo pipefail
+
+. shell-getopt
+. shell-ini-config
+
+
+PROG_NAME="${0##*/}"
+VERSION="0.1"
+MODE="deploy"
+GLOBAL_EXIT=0
+input_json=
+entryfile=/usr/share/alterator/service/service-chrony.service
+
+OPTIONS_LIST="help,
+              version,
+              undeploy,
+              deploy,
+              restore,
+              backup,
+              status,
+              start,
+              stop,
+              configure"
+
+OPTIONS_SHORT_LIST="h,v,d,p,b,r,s"
+
+TEMP=$(getopt -n "$PROG_NAME" -o "$OPTIONS_SHORT_LIST" -l "$OPTIONS_LIST" -- "$@")
+eval set -- "$TEMP"
+
+while :; do
+    case "$1" in
+        -h|--help)
+            show_usage
+            ;;
+        -v|--version)
+            show_version
+            ;;
+        -d|--deploy)
+            MODE="deploy"
+            ;;
+        -p|--undeploy)
+            MODE="undeploy"
+            ;;
+        -r|--restore)
+            MODE="restore"
+            ;;
+        -b|--backup)
+            MODE="backup"
+            ;;
+        -s|--status)
+            MODE="status"
+            ;;
+        --start)
+            MODE="start"
+            ;;
+        --stop)
+            MODE="stop"
+            ;;
+        --configure)
+            MODE="configure"
+            ;;
+        --) shift; break
+            ;;
+        *) fatal "Unrecognized option: $1"
+            ;;
+    esac
+    shift
+done
+
+
+backup_config() {
+    echo "soon"
+}
+
+
+call_deploy() {
+    echo "soon"
+
+}
+
+call_start() {
+    echo "soon"
+}
+
+call_stop(){
+    echo "soon"
+}
+
+call_undeploy(){
+
+    echo "soon"
+}
+
+call_status() {
+    echo "soon"
+
+}
+
+call_backup(){
+    echo "service is not bombom right now"
+    return 0
+}
+
+call_restore(){
+    echo "service is not bombom right now"
+    return 0
+}
+
+call_configure(){
+    echo "service is not bombom right now"
+    return 0
+}
+
+case "$MODE" in
+    deploy)
+        call_provision || GLOBAL_EXIT=1
+        ;;
+    undeploy)
+        call_undeploy || GLOBAL_EXIT=1
+        ;;
+    status)
+        call_status 
+        ;;
+    backup)
+        call_backup || GLOBAL_EXIT=1
+        ;;
+    restore)
+        call_restore || GLOBAL_EXIT=1
+        ;;
+    start)
+        call_start || GLOBAL_EXIT=1
+        ;;
+    stop)
+        call_stop || GLOBAL_EXIT=1
+        ;;
+    configure)
+        call_configure || GLOBAL_EXIT=1
+        ;;
+esac
+
+exit $GLOBAL_EXIT

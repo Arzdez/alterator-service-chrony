@@ -1,0 +1,66 @@
+type = "Service"
+name = "Chrony service"
+category = "X-Alterator-Servers"
+display_name.en = "Chrony service"
+display_name.ru = "Сервис Chrony"
+no_default_diag = true
+
+[parameters.defaultPoll]
+display_name.en = "Default poll"
+display_name.ru = "Пул по умолчанию"
+comment.en = "Disable default poll of NTP servers"
+comment.ru = "Убрать пул серверов NTP по умолчанию"
+type = "boolean"
+context = [
+    "deploy"
+]
+
+[parameters.ntpServersSettings]
+display_name.en = "NTP servers settings"
+display_name.ru = "Настройки серверов NTP"
+type = "object"
+context = [
+    "deploy",
+    "status"
+]
+[parameters.ntpServersSettings.properties.serverDomainName]
+display_name.en = "Domain name of NTP server"
+display_name.ru = "Доменное имя сервера NTP"
+type = "array"
+array_type = "string"
+array_min = 1
+
+[parameters.clientsSettings]
+display_name.en = "Clients subnets settings"
+display_name.ru = "Настройка клиентских подсетей"
+type = "object"
+context = [
+    "deploy",
+    "status"
+]
+[parameters.clientsSettings.properties.localStratum]
+display_name.en = "Local stratum of this server"
+display_name.ru = "Уровень этого сервера"
+type = "integer"
+default = 10
+[parameters.clientsSettings.properties.subnetIpAddresses]
+display_name.en = "IP address of NTP server"
+display_name.ru = "IP адрес сервера NTP"
+type = "array"
+array_type = "string"
+array_min = 1
+pattern = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(?:[1-2]?[0-9]|3[0-2])$"
+
+
+[resources.chronyConf]
+display_name.en = "Chrony configuring file"
+display_name.ru = "Конфигурационный файл Chrony"
+type = "file"
+path.value = "/etc/chrony.conf"
+
+[resources.Chronyd]
+display_name.en = "Chronyd service"
+display_name.ru = "Сервис chronyd"
+type = "systemd_unit"
+unit_name.value = "chronyd.service"
+

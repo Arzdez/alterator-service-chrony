@@ -5,46 +5,254 @@ display_name.en = "Chrony service"
 display_name.ru = "Сервис Chrony"
 no_default_diag = true
 
+[parameters.disableDefaultPoll]
+display_name.en = "Disable default poll"
+display_name.ru = "Убрать пул по умолчанию"
+type = "boolean"
+context = [
+    "deploy",
+    "configure",
+    "status"
+]
+
 [parameters.ntpServersSettings]
 display_name.en = "NTP servers settings"
 display_name.ru = "Настройки серверов NTP"
-type = "object"
+type = "array"
+array_type = "object"
+prototype = "ntpServer"
 context = [
     "deploy",
-    "status"
+    "status",
+    "configure"
 ]
 required = [
     "deploy"
 ]
-[parameters.ntpServersSettings.properties.serverDomainName]
+
+[parameters.ntpPoolsSettings]
+display_name.en = "Settings of NTP pools"
+display_name.ru = "Настройки пулов серверов NTP"
+type = "array"
+array_type = "object"
+prototype = "ntpPool"
+context = [
+    "deploy",
+    "status",
+    "configure"
+]
+required = [
+    "deploy"
+]
+
+[parameters.ntpServer]
+display_name.en = "NTP server"
+display_name.ru = "Сервер NTP"
+type = "object"
+context = []
+[parameters.ntpServer.properties.serverDomainName]
 display_name.en = "Domain name of NTP server"
 display_name.ru = "Доменное имя сервера NTP"
-type = "array"
-array_type = "string"
-array_min = 1
-[parameters.ntpServersSettings.properties.poolDomainName]
+type = "string"
+required = true
+[parameters.ntpServer.properties.bursts]
+display_name.en = "burst/iburst"
+display_name.ru = "burst/iburst"
+type = "enum"
+values = ["burst", "iburst"]
+default = "iburst"
+required = true
+[parameters.ntpServer.properties.minpoll]
+display_name.en = "Minpoll"
+display_name.ru = "Minpoll"
+type = "integer"
+min = -7
+max = 24
+required = false
+[parameters.ntpServer.properties.maxpoll]
+display_name.en = "Maxpoll"
+display_name.ru = "Maxpoll"
+type = "integer"
+min = -7
+max = 24
+required = false
+[parameters.ntpServer.properties.offline]
+display_name.en = "Offline mode"
+display_name.ru = "Режим оффлайн"
+type = "enum"
+required = false
+values = ["offline", "auto offline"]
+[parameters.ntpServer.properties.prefer]
+display_name.en = "Prefer this server"
+display_name.ru = "Предпочитать этот сервер другим"
+type = "boolean"
+required = false
+[parameters.ntpServer.properties.noSelect]
+display_name.en = "Never select this source"
+display_name.ru = "Никогда не выбирать этот сервер"
+type = "boolean"
+required = false
+[parameters.ntpServer.properties.trust]
+display_name.en = "Assume time from this source is always true."
+display_name.ru = "Время из этого источника всегда истинно"
+type = "boolean"
+required = false
+[parameters.ntpServer.properties.require]
+display_name.en = "Require that server"
+display_name.ru = "Сделать этот сервер обязательным"
+type = "boolean"
+required = false
+
+[parameters.ntpPool]
+display_name.en = "NTP pool"
+display_name.ru = "Пул серверов NTP"
+type = "object"
+context = []
+[parameters.ntpPool.properties.poolDomainName]
 display_name.en = "Domain name of NTP pool"
 display_name.ru = "Доменное имя пула серверов NTP"
-type = "array"
-array_type = "string"
-array_min = 1
+type = "string"
+required = true
+[parameters.ntpPool.properties.bursts]
+display_name.en = "burst/iburst"
+display_name.ru = "burst/iburst"
+type = "enum"
+values = ["burst", "iburst"]
+default = "iburst"
+required = true
+[parameters.ntpPool.properties.maxsources]
+display_name.en = "Maxsources"
+display_name.ru = "Maxsources"
+type = "integer"
+min = 1
+max = 16
+default = 4
+[parameters.ntpPool.properties.minpoll]
+display_name.en = "Minpoll"
+display_name.ru = "Minpoll"
+type = "integer"
+min = -7
+max = 24
+required = false
+[parameters.ntpPool.properties.maxpoll]
+display_name.en = "Maxpoll"
+display_name.ru = "Maxpoll"
+type = "integer"
+min = -7
+max = 24
+required = false
+[parameters.ntpPool.properties.offline]
+display_name.en = "Offline mode"
+display_name.ru = "Режим оффлайн"
+type = "enum"
+required = false
+values = ["offline", "auto offline"]
+[parameters.ntpPool.properties.prefer]
+display_name.en = "Prefer this pool"
+display_name.ru = "Предпочитать этот пул другим"
+type = "boolean"
+required = false
+[parameters.ntpPool.properties.noSelect]
+display_name.en = "Never select this source"
+display_name.ru = "Никогда не выбирать этот пул"
+type = "boolean"
+required = false
+[parameters.ntpPool.properties.trust]
+display_name.en = "Assume time from this source is always true."
+display_name.ru = "Время из этого источника всегда истинно"
+type = "boolean"
+required = false
+[parameters.ntpPool.properties.required]
+display_name.en = "Require that server"
+display_name.ru = "Сделать этот пул обязательным"
+type = "boolean"
+required = false
+
+[parameters.ntpDefaultPool]
+display_name.en = "NTP default pool"
+display_name.ru = "Пул серверов NTP по умолчанию"
+comment.en = "pool.ntp.org"
+comment.ru = "pool.ntp.org"
+type = "object"
+context = [ 
+    "deploy", 
+    "configure" 
+]
+[parameters.ntpDefaultPool.properties.poolDomainName]
+display_name.en = "Domain name of NTP pool"
+display_name.ru = "Доменное имя пула NTP"
+type = "string"
+default = "pool.ntp.org"
+required = true
+[parameters.ntpDefaultPool.properties.bursts]
+display_name.en = "burst/iburst"
+display_name.ru = "burst/iburst"
+type = "enum"
+values = ["burst", "iburst"]
+default = "iburst"
+required = true
+[parameters.ntpDefaultPool.properties.maxsources]
+display_name.en = "Maxsources"
+display_name.ru = "Maxsources"
+type = "integer"
+min = 1
+max = 16
+default = 4
+[parameters.ntpDefaultPool.properties.minpoll]
+display_name.en = "Minpoll"
+display_name.ru = "Minpoll"
+type = "integer"
+min = -7
+max = 24
+required = false
+[parameters.ntpDefaultPool.properties.maxpoll]
+display_name.en = "Maxpoll"
+display_name.ru = "Maxpoll"
+type = "integer"
+min = -7
+max = 24
+required = false
+[parameters.ntpDefaultPool.properties.offline]
+display_name.en = "Offline mode"
+display_name.ru = "Режим оффлайн"
+type = "enum"
+required = false
+values = ["offline", "auto offline"]
+[parameters.ntpDefaultPool.properties.prefer]
+display_name.en = "Prefer this server"
+display_name.ru = "Предпочитать этот сервер другим"
+type = "boolean"
+required = false
+[parameters.ntpDefaultPool.properties.noSelect]
+display_name.en = "Never select this source"
+display_name.ru = "Никогда не выбирать этот сервер"
+type = "boolean"
+required = false
+[parameters.ntpDefaultPool.properties.trust]
+display_name.en = "Assume time from this source is always true."
+display_name.ru = "Время из этого источника всегда истинно"
+type = "boolean"
+required = false
+[parameters.ntpDefaultPool.properties.required]
+display_name.en = "Require that server"
+display_name.ru = "Сделать этот пул обязательным"
+type = "boolean"
+required = false
 
 [parameters.clientsSettings]
 display_name.en = "Clients subnets settings"
 display_name.ru = "Настройка клиентских подсетей"
 type = "object"
 context = [
-    "deploy",
-    "status"
-]
-required = [
-    "deploy"
+    "status",
+    "configure"
 ]
 [parameters.clientsSettings.properties.localStratum]
 display_name.en = "Local stratum of this server"
 display_name.ru = "Уровень этого сервера"
 type = "integer"
 default = 10
+required = true
 [parameters.clientsSettings.properties.subnetIpAddresses]
 display_name.en = "IP address of local subnets"
 display_name.ru = "IP адрес локальных подсетей"
@@ -56,12 +264,15 @@ pattern = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][
 [parameters.makestep]
 display_name.en = "Makestep"
 display_name.ru = "Makestep"
+comment.en = "The first number is a float, the second is an integer"
+comment.ru = "Первое число с плавающей точкой, второе - целое"
 type = "string"
 default = "1.0 3"
 pattern = "^[0-9]+\\.[0-9]+ [0-9]+$"
 context = [
     "deploy",
-    "status"
+    "status",
+    "configure"
 ]
 required = [
     "deploy"
@@ -76,7 +287,8 @@ type = "boolean"
 default = true
 context = [
     "deploy",
-    "status"
+    "status",
+    "configure"
 ]
 required = [
     "deploy"

@@ -40,6 +40,8 @@ OPTIONS_LIST="help,
               version,
               undeploy,
               deploy,
+              undeploy,
+              deploy,
               restore,
               backup,
               status,
@@ -47,7 +49,7 @@ OPTIONS_LIST="help,
               stop,
               configure"
 
-OPTIONS_SHORT_LIST="h,v,d,p,b,r,s"
+OPTIONS_SHORT_LIST="h,v,u,d,b,r,s"
 
 TEMP=$(getopt -n "$PROG_NAME" -o "$OPTIONS_SHORT_LIST" -l "$OPTIONS_LIST" -- "$@")
 eval set -- "$TEMP"
@@ -60,11 +62,11 @@ while :; do
         -v|--version)
             show_version
             ;;
+        -u|--undeploy)
+            MODE="undeploy"
+            ;;
         -d|--deploy)
             MODE="deploy"
-            ;;
-        -p|--undeploy)
-            MODE="undeploy"
             ;;
         -r|--restore)
             MODE="restore"
@@ -106,7 +108,7 @@ backup_config() {
         echo "Backup file $backup_file already exists, skipping backup."
     fi
     if [ -f "$config_file" ]; then
-        mv -u "$config_file" "$backup_file" || retval=1
+        cp -u "$config_file" "$backup_file" || retval=1
     else
         echo "File $config_file not found, skipping backup."
     fi
@@ -147,46 +149,153 @@ parse_json() {
     return 0
 }
 
-upper() {
-    echo -n "$1" | tr '[:lower:]' '[:upper:]'
-}
-
-call_provision() {
+call_deploy() {
     local retval=0
     local input_json=
     local ntp_values=()
     local local_subnets=()
+    local flag=0
     input_json="$(read_stdin)"
     
     echo -e "Data is received from stdin"
     
     backup_config /etc/chrony.conf "original" || retval=1
+    
+    echo "$input_json" > /usr/share/alterator-service-chrony/deployment-config.json || retval=1
 
     keys=$(echo "$input_json" | jq -r 'keys[]')
     for key in $keys; do
         case "$key" in
-            #defaultPoll)
-            #    dP_value="$(parse_json "$input_json" "$key")"
-            #    if [ -n "$dP_value" ] && [ "$dP_value" != "null" ] && [ "$dP_value" = "true" ]; then
-            #        echo -e "\npool pool.ntp.org iburst" >> /etc/chrony.conf || retval=1
-            #        echo -e "Default pool of NTP servers is added: pool.ntp.org\n"
-            #    fi  
-            #    ;;
+            disableDefaultPoll)
+                dP_value="$(parse_json "$input_json" "$key")"
+                if [ -n "$dP_value" ] && [ "$dP_value" != "null" ] && [ "$dP_value" = "true" ]; then
+                    sed -i '/^pool pool\.ntp\.org/ s/^/#/' /etc/chrony.conf
+                    echo -e "Default pool of NTP servers is disabled"
+                    flag=1
+                fi  
+                ;;
             makestep)
                 ms_value="$(parse_json "$input_json" "$key")"
                 if [ -n "$ms_value" ] && [ "$ms_value" != "null" ]; then
-                    echo -e "\nmakestep ${ms_value}" >> /etc/chrony.conf || retval=1
-                    echo -e "Makestep is set to ${ms_value}\n"
+                    sed -i "s/^makestep .*/makestep ${ms_value}/" /etc/chrony.conf 
+                    echo -e "Makestep is set to ${ms_value}"
                 fi
                 ;;
             rtcSync)
                 rtc_value="$(parse_json "$input_json" "$key")"
-                if [ -n "$rtc_value" ] && [ "$rtc_value" ]
+                if [ -n "$rtc_value" ] && [ "$rtc_value" = "false" ]
                 then
-                    echo -e "\nrtcsync" >> /etc/chrony.conf || retval=1
-                    echo -e "RTC sync is set"
+                    sed -i '/^\s*rtcsync\s*$/d' /etc/chrony.conf
+                    echo -e "RTC sync is canseled"
+                else echo -e "RTC sync is set"
                 fi
-                ;;    
+                ;;
+            ntpServersSettings)
+                #ntp_servers=$(echo "$input_json" | jq -r '.ntpServersSettings | keys[]?')
+                ntp_array=$(echo "$input_json" | jq -c '.ntpServersSettings')
+                if [ "$ntp_array" != "null" ]; then
+                    echo "$ntp_array" | jq -c '.[]' | while read -r ntp_json; do
+                        # Обрабатываем каждый объект JSON по отдельности
+                        server_domain=$(echo "$ntp_json" | jq -r '.serverDomainName // empty')
+                        bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
+                        minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
+                        maxpoll=$(echo "$ntp_json" | jq -r '.maxpoll // empty')
+                        no_select=$(echo "$ntp_json" | jq -r '.noSelect // empty')
+                        prefer=$(echo "$ntp_json" | jq -r '.prefer // empty')
+                        offline=$(echo "$ntp_json" | jq -r '.offline // empty')
+                        require=$(echo "$ntp_json" | jq -r '.require // empty')
+                        trust=$(echo "$ntp_json" | jq -r '.trust // empty')
+
+                        ntp_line="server"
+                        [ -n "$server_domain" ] && ntp_line+=" $server_domain"
+                        [ -n "$bursts" ] && ntp_line+=" $bursts"
+                        [ -n "$minpoll" ] && ntp_line+=" minpoll $minpoll"
+                        [ -n "$maxpoll" ] && ntp_line+=" maxpoll $maxpoll"
+                        [ "$no_select" = "true" ] && ntp_line+=" noselect"
+                        [ "$prefer" = "true" ] && ntp_line+=" prefer"
+                        [ "$offline" = "offline" ] && ntp_line+=" offline"
+                        [ "$offline" = "auto offline" ] && ntp_line+=" auto_offline"
+                        [ "$require" = "true" ] && ntp_line+=" require"
+                        [ "$trust" = "true" ] && ntp_line+=" trust"
+
+                        sed -i "8i $ntp_line" /etc/chrony.conf
+                        echo "$ntp_line"
+                    done
+                fi
+                ;;
+            ntpPoolsSettings)
+                ntp_array=$(echo "$input_json" | jq -c '.ntpPoolsSettings')
+                if [ "$ntp_array" != "null" ]; then
+                    echo "$ntp_array" | jq -c '.[]' | while read -r ntp_json; do
+                        # Обрабатываем каждый объект JSON по отдельности
+                        pool_domain=$(echo "$ntp_json" | jq -r '.poolDomainName // empty')
+                        bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
+                        minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
+                        maxpoll=$(echo "$ntp_json" | jq -r '.maxpoll // empty')
+                        no_select=$(echo "$ntp_json" | jq -r '.noSelect // empty')
+                        prefer=$(echo "$ntp_json" | jq -r '.prefer // empty')
+                        offline=$(echo "$ntp_json" | jq -r '.offline // empty')
+                        require=$(echo "$ntp_json" | jq -r '.require // empty')
+                        trust=$(echo "$ntp_json" | jq -r '.trust // empty')
+                        maxsources=$(echo "$ntp_json" | jq -r '.maxsources // empty')
+
+                        ntp_line="pool"
+                        [ -n "$pool_domain" ] && ntp_line+=" $pool_domain"
+                        [ -n "$bursts" ] && ntp_line+=" $bursts"
+                        [ -n "$minpoll" ] && ntp_line+=" minpoll $minpoll"
+                        [ -n "$maxpoll" ] && ntp_line+=" maxpoll $maxpoll"
+                        [ "$no_select" = "true" ] && ntp_line+=" noselect"
+                        [ "$prefer" = "true" ] && ntp_line+=" prefer"
+                        [ "$offline" = "offline" ] && ntp_line+=" offline"
+                        [ "$offline" = "auto offline" ] && ntp_line+=" auto_offline"
+                        [ "$require" = "true" ] && ntp_line+=" require"
+                        [ "$trust" = "true" ] && ntp_line+=" trust"
+                        [ -n "$maxsources" ] && ntp_line+=" maxsources $maxsources"
+
+                        sed -i "8i $ntp_line" /etc/chrony.conf
+                        echo "$ntp_line"
+                    done
+                fi
+                ;;
+            ntpDefaultPool)
+                ntp_array=$(echo "$input_json" | jq -c '.ntpDefaultPool')
+                echo "test test test"
+                if [ "$ntp_array" != "null" ]; then
+                    ntp_json="$ntp_array"
+                    pool_domain=$(echo "$ntp_json" | jq -r '.poolDomainName // empty')
+                    bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
+                    minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
+                    maxpoll=$(echo "$ntp_json" | jq -r '.maxpoll // empty')
+                    no_select=$(echo "$ntp_json" | jq -r '.noSelect // empty')
+                    prefer=$(echo "$ntp_json" | jq -r '.prefer // empty')
+                    offline=$(echo "$ntp_json" | jq -r '.offline // empty')
+                    require=$(echo "$ntp_json" | jq -r '.require // empty')
+                    trust=$(echo "$ntp_json" | jq -r '.trust // empty')
+                    maxsources=$(echo "$ntp_json" | jq -r '.maxsources // empty')
+
+                    ntp_line="pool"
+                    [ -n "$pool_domain" ] && ntp_line+=" $pool_domain"
+                    [ -n "$bursts" ] && ntp_line+=" $bursts"
+                    [ -n "$minpoll" ] && ntp_line+=" minpoll $minpoll"
+                    [ -n "$maxpoll" ] && ntp_line+=" maxpoll $maxpoll"
+                    [ "$no_select" = "true" ] && ntp_line+=" noselect"
+                    [ "$prefer" = "true" ] && ntp_line+=" prefer"
+                    [ "$offline" = "offline" ] && ntp_line+=" offline"
+                    [ "$offline" = "auto offline" ] && ntp_line+=" auto_offline"
+                    [ "$require" = "true" ] && ntp_line+=" require"
+                    [ "$trust" = "true" ] && ntp_line+=" trust"
+                    [ -n "$maxsources" ] && ntp_line+=" maxsources $maxsources"
+                    
+                    if [ $flag -eq 1 ]; then
+                        sed -i "s|^\(#*\)pool pool\.ntp\.org iburst\$|#${ntp_line}|" /etc/chrony.conf
+                    else
+                        sed -i "s|^\(#*\)pool pool\.ntp\.org iburst\$|\1$ntp_line|" /etc/chrony.conf
+                    fi
+                    sed -i "s|^\(#*\)pool pool\.ntp\.org iburst\$|\1$ntp_line|" /etc/chrony.conf
+                    echo "$ntp_line"
+                    
+                fi
+                ;;
             *)
             
                 false
@@ -195,120 +304,104 @@ call_provision() {
     done
 
 
-    ntp_keys=$(echo "$input_json" | jq -r '.ntpServersSettings | keys[]?')
-    for ntp_key in $ntp_keys; do
-        case "$ntp_key" in
-            serverDomainName)
-                value="$(get_json_value "$input_json" "$ntp_key" ".ntpServersSettings")"
-                if [[ "$value" =~ ^\[.*\]$ ]]; then
-                    # Удаляем квадратные скобки и пробелы, разбиваем по запятой и переносу строки
-                    echo -e "Adding servers:"
-                    value_clean=$(echo "$value" | tr -d '[]' | tr ',\n' '\n' | sed '/^\s*$/d')
-                    while read -r server; do
-                        server=$(echo "$server" | xargs) # убираем пробелы по краям
-                        if [ -n "$server" ]; then
-                            echo -e "\nserver ${server} iburst" >> /etc/chrony.conf || retval=1
-                            echo "${server}"
-                        fi
-                    done <<< "$value_clean"
-                else
-                    if [ -n "$value" ] && [ "$value" != "null" ]; then
-                        echo -e "\nserver ${value} iburst" >> /etc/chrony.conf || retval=1
-                        echo "${value}"
-                    fi
-                fi
-                #if [ -n "$value" ] && [ "$value" != "null" ]; then
-                #    echo -e "\nserver ${value} iburst" >> /etc/chrony.conf || retval=1
-                #    echo "${value}"
-                #fi
-                ;;
-                poolDomainName)
-                value="$(get_json_value "$input_json" "$ntp_key" ".ntpServersSettings")"
-                if [[ "$value" =~ ^\[.*\]$ ]]; then
-                    echo -e "Adding pools:"
-                    value_clean=$(echo "$value" | tr -d '[]' | tr ',\n' '\n' | sed '/^\s*$/d')
-                    while read -r pool; do
-                        pool=$(echo "$pool" | xargs) # убираем пробелы по краям
-                        if [ -n "$pool" ]; then
-                            echo -e "\npool ${pool} iburst" >> /etc/chrony.conf || retval=1
-                            echo "${pool}"
-                        fi
-                    done <<< "$value_clean"
-                else
-                    if [ -n "$value" ] && [ "$value" != "null" ]; then
-                        echo -e "\npool ${value} iburst" >> /etc/chrony.conf || retval=1
-                        echo "${value}"
-                    fi
-                fi
-                ;;
-            *)
-                false
-                ;;
-        esac
-    done
-    
-    subnet_keys=$(echo "$input_json" | jq -r '.clientsSettings | keys[]?')
-    for subnet_key in $subnet_keys; do
-        case "$subnet_key" in
-            subnetIpAddresses)
-                value="$(get_json_value "$input_json" "$subnet_key" ".clientsSettings")"
-                if [[ "$value" =~ ^\[.*\]$ ]]; then
-                    echo -e "Adding allowed subnets:"
-                    value_clean=$(echo "$value" | tr -d '[]' | tr ',\n' '\n' | sed '/^\s*$/d')
-                    while read -r subnet; do
-                        subnet=$(echo "$subnet" | xargs)
-                        if [ -n "$subnet" ]; then
-                            echo -e "\nallow ${subnet}" >> /etc/chrony.conf || retval=1
-                            echo "${subnet}"
-                        fi
-                    done <<< "$value_clean"
-                else
-                    if [ -n "$value" ] && [ "$value" != "null" ]; then
-                        echo -e "\nallow ${value}" >> /etc/chrony.conf || retval=1
-                        echo "${value}"
-                    fi
-                fi
-                ;;
-            localStratum)
-                value="$(get_json_value "$input_json" "$subnet_key" ".clientsSettings")"
-                if [ -n "$value" ] && [ "$value" != "null" ]; then
-                    echo -e "\nlocal stratum ${value}" >> /etc/chrony.conf || retval=1
-                    echo -e "Local stratum is set to ${value}\n"
-                fi
-                ;;
-            *)
-                false
-                ;;
-        esac
-    done
+    #ntp_keys=$(echo "$input_json" | jq -r '.ntpServersSettings | keys[]?')
+    #for ntp_key in $ntp_keys; do
+    #    echo -e "\n $ntp_key"
+    #    case "$ntp_key" in
+    #        serverDomainName)
+    #            value="$(get_json_value "$input_json" "$ntp_key" ".ntpServersSettings")"
+    #            echo -e "$value"
+    #            if [[ "$value" =~ ^\[.*\]$ ]]; then
+    #                # Удаляем квадратные скобки и пробелы, разбиваем по запятой и переносу строки
+    #                echo -e "Adding servers:"
+    #                value_clean=$(echo "$value" | tr -d '[]' | tr ',\n' '\n' | sed '/^\s*$/d')
+    #                while read -r server; do
+    #                    server=$(echo "$server" | xargs) # убираем пробелы по краям
+    #                    if [ -n "$server" ]; then
+    #                        echo -e "\nserver ${server} iburst" >> /etc/chrony.conf || retval=1
+    #                        echo "${server}"
+    #                    fi
+    #                done <<< "$value_clean"
+    #            else
+    #                if [ -n "$value" ] && [ "$value" != "null" ]; then
+    #                    echo -e "\nserver ${value} iburst" >> /etc/chrony.conf || retval=1
+    #                    echo "${value}"
+    #                fi
+    #            fi
+    #            #if [ -n "$value" ] && [ "$value" != "null" ]; then
+    #            #    echo -e "\nserver ${value} iburst" >> /etc/chrony.conf || retval=1
+    #            #    echo "${value}"
+    #            #fi
+    #            #;;
+    #            #poolDomainName)
+    #            #value="$(get_json_value "$input_json" "$ntp_key" ".ntpServersSettings")"
+    #            #if [[ "$value" =~ ^\[.*\]$ ]]; then
+    #            #    echo -e "Adding pools:"
+    #            #    value_clean=$(echo "$value" | tr -d '[]' | tr ',\n' '\n' | sed '/^\s*$/d')
+    #            #    while read -r pool; do
+    #            #        pool=$(echo "$pool" | xargs) # убираем пробелы по краям
+    #            #        if [ -n "$pool" ]; then
+    #            #            echo -e "\npool ${pool} iburst" >> /etc/chrony.conf || retval=1
+    #            #            echo "${pool}"
+    #            #        fi
+    #            #    done <<< "$value_clean"
+    #            #else
+    #            #    if [ -n "$value" ] && [ "$value" != "null" ]; then
+    #            #        echo -e "\npool ${value} iburst" >> /etc/chrony.conf || retval=1
+    #            #        echo "${value}"
+    #            #    fi
+    #            #fi
+    #            ;;
+    #        *)
+    #            false
+    #            ;;
+    #    esac
+    #done
+    #
+    #subnet_keys=$(echo "$input_json" | jq -r '.clientsSettings | keys[]?')
+    #for subnet_key in $subnet_keys; do
+    #    case "$subnet_key" in
+    #        subnetIpAddresses)
+    #            value="$(get_json_value "$input_json" "$subnet_key" ".clientsSettings")"
+    #            if [[ "$value" =~ ^\[.*\]$ ]]; then
+    #                echo -e "Adding allowed subnets:"
+    #                value_clean=$(echo "$value" | tr -d '[]' | tr ',\n' '\n' | sed '/^\s*$/d')
+    #                while read -r subnet; do
+    #                    subnet=$(echo "$subnet" | xargs)
+    #                    if [ -n "$subnet" ]; then
+    #                        echo -e "\nallow ${subnet}" >> /etc/chrony.conf || retval=1
+    #                        echo "${subnet}"
+    #                    fi
+    #                done <<< "$value_clean"
+    #            else
+    #                if [ -n "$value" ] && [ "$value" != "null" ]; then
+    #                    echo -e "\nallow ${value}" >> /etc/chrony.conf || retval=1
+    #                    echo "${value}"
+    #                fi
+    #            fi
+    #            ;;
+    #        localStratum)
+    #            value="$(get_json_value "$input_json" "$subnet_key" ".clientsSettings")"
+    #            if [ -n "$value" ] && [ "$value" != "null" ]; then
+    #                echo -e "\nlocal stratum ${value}" >> /etc/chrony.conf || retval=1
+    #                echo -e "Local stratum is set to ${value}\n"
+    #            fi
+    #            ;;
+    #        *)
+    #            false
+    #            ;;
+    #    esac
+    #done
 
-    echo -e "\ndriftfile /var/lib/chrony/drift" >> /etc/chrony.conf || retval=1
-    echo -e "\nlogdir /var/log/chrony" >> /etc/chrony.conf || retval=1
-    echo -e "\nntsdumpdir /var/lib/chrony" >> /etc/chrony.conf || retval=1
-
-    echo -e "Default directories are set:\nlogdir: /var/log/chrony\ndriftfile: /var/lib/chrony/drift\nntsdumpdir: /var/lib/chrony\n"
+    #echo -e "\ndriftfile /var/lib/chrony/drift" >> /etc/chrony.conf || retval=1
+    #echo -e "\nlogdir /var/log/chrony" >> /etc/chrony.conf || retval=1
+    #echo -e "\nntsdumpdir /var/lib/chrony" >> /etc/chrony.conf || retval=1
+#
+    #echo -e "Default directories are set:\nlogdir: /var/log/chrony\ndriftfile: /var/lib/chrony/drift\nntsdumpdir: /var/lib/chrony\n"
 
     echo "$input_json" > /usr/share/alterator-service-chrony/deployment-config.json || retval=1
     
     if [ $retval -eq 0 ]; then
-        # Add NTP servers from ntp_values array
-        #if [ "${#ntp_values[@]}" -gt 0 ]; then
-        #    for value in "${ntp_values[@]}"; do
-        #        if [ -n "$value" ]; then
-        #            echo -e "${value}" >> /etc/chrony.conf
-        #            echo -e "Server is added: ${value}\n"
-        #        fi
-        #    done
-        #fi
-        ## Add allowed subnets from local_subnets array
-        #if [ "${#local_subnets[@]}" -gt 0 ]; then
-        #    for value in "${local_subnets[@]}"; do
-        #        if [ -n "$value" ]; then
-        #            echo -e "${value}" >> /etc/chrony.conf
-        #            echo -e "Allowing access for subnet: ${value}\n"
-        #        fi
-        #    done
-        #fi
         echo -e "Service is ready!"
     else
         echo -e "An error occurred while processing the input data."
@@ -322,14 +415,26 @@ call_start() {
 }
 
 call_stop(){
-    echo "soon"
+    local retval=0
+    systemctl disable --now  chronyd.service || retval=1
+    if [ $retval -eq 0 ]; then
+        echo "Service chronyd stoped successfully."
+    else
+        echo "Failed to stop service chronyd."
+    fi
+
+    return $retval
 }
 
 call_undeploy(){
+    local retval=0
+    local backup_dir="/usr/share/alterator-service-chrony/config-backup"
+    echo "Demoting in progress..."
+    backup_config /etc/chrony.conf "before_demote" 1 || retval=1
+    echo "Creating backup of the current configuration file"
+    
+    rm -f /usr/share/alterator-service-chrony/deployment-config.json
 
-<<<<<<< HEAD
-    echo "soon"
-=======
     mv -f "$backup_dir/chrony.conf.original" /etc/chrony.conf
 
     chmod 644 /etc/chrony.conf
@@ -348,7 +453,22 @@ call_undeploy(){
 }
 
 call_status() {
-    echo "soon"
+    local deployment_config_file="/usr/share/alterator-service-chrony/deployment-config.json"
+    local conf="/etc/chrony.conf"
+    local status_output=
+
+    if [ ! -f "$deployment_config_file" ] || [ ! -f "$conf" ]; then
+        exit 1
+    fi
+
+    status_output="$(cat "$deployment_config_file")"
+    echo "$status_output"
+
+    if systemctl is-active --quiet chrony.service; then
+        exit 128
+    else
+        exit 127
+    fi
 
 }
 
@@ -363,14 +483,259 @@ call_restore(){
 }
 
 call_configure(){
-    echo "service is not bombom right now"
-    return 0
+    local retval=0
+    local input_json=
+    local ntp_values=()
+    local local_subnets=()
+    local flag=0
+    input_json="$(read_stdin)"
+    
+    echo -e "Data is received from stdin"
+
+    old_servers=$(grep -E '^server[[:space:]]' /etc/chrony.conf | awk '{print $2}')
+    new_servers=$(echo "$input_json" | jq -r '.ntpServersSettings[]?.serverDomainName // empty')
+    for old_server in $old_servers; do
+        found=0
+        for new_server in $new_servers; do
+            if [ "$old_server" = "$new_server" ]; then
+                found=1
+                break
+            fi
+        done
+        if [ $found -eq 0 ] && [ -n "$old_server" ]; then
+            sed -i "/^server[[:space:]]\+$old_server\b.*/d" /etc/chrony.conf
+        fi
+    done
+    old_pools=$(grep -E '^pool[[:space:]]' /etc/chrony.conf | awk '{print $2}')
+    new_pools=$(echo "$input_json" | jq -r '.ntpPoolsSettings[]?.poolDomainName // empty')
+    for old_pool in $old_pools; do
+        found=0
+        for new_pool in $new_pools; do
+            if [ "$old_pool" = "$new_pool" ]; then
+                found=1
+                break
+            elif [ "$old_pool" = "pool.ntp.org" ]; then
+                found=1
+                break
+            fi
+        done
+        if [ $found -eq 0 ] && [ -n "$old_pool" ]; then
+            sed -i "/^pool[[:space:]]\+$old_pool\b.*/d" /etc/chrony.conf
+        fi
+    done
+
+    old_subnets=$(grep -E '^allow[[:space:]]' /etc/chrony.conf | awk '{print $2}')
+    new_subnets=$(echo "$input_json" | jq -r '.clientsSettings.subnetIpAddresses[]? // empty')
+    for old_subnet in $old_subnets; do
+        found=0
+        for new_subnet in $new_subnets; do
+            if [ "$old_subnet" = "$new_subnet" ]; then
+                found=1     
+                break
+            fi
+        done
+        if [ $found -eq 0 ] && [ -n "$old_subnet" ]; then
+            escaped_old_subnet=$(printf '%s\n' "$old_subnet" | sed -E 's/[\/&.]/\\&/g')
+            sed -i "/^allow[[:space:]]\{1,\}${escaped_old_subnet}[[:space:]]*$/d" /etc/chrony.conf
+        fi
+    done
+    
+    echo "$input_json" > /usr/share/alterator-service-chrony/configuring-config.json || retval=1
+
+    keys=$(echo "$input_json" | jq -r 'keys[]')
+    for key in $keys; do
+        case "$key" in
+            disableDefaultPoll)
+                dP_value="$(parse_json "$input_json" "$key")"
+                if [ -n "$dP_value" ] && [ "$dP_value" != "null" ] && [ "$dP_value" = "true" ]; then
+                    sed -i '/^pool pool\.ntp\.org/ s/^/#/' /etc/chrony.conf
+                    echo -e "Default pool of NTP servers is disabled"
+                    flag=1
+                fi
+                if [ -n "$dP_value" ] && [ "$dP_value" != "null" ] && [ "$dP_value" = "false" ]; then
+                    sed -i '/^#pool pool\.ntp\.org/ s/^#//' /etc/chrony.conf
+                    echo -e "Default pool of NTP servers is enabled"
+                    flag=0  
+                fi  
+                ;;
+            makestep)
+                ms_value="$(parse_json "$input_json" "$key")"
+                if [ -n "$ms_value" ] && [ "$ms_value" != "null" ]; then
+                    sed -i "s/^makestep .*/makestep ${ms_value}/" /etc/chrony.conf 
+                    echo -e "Makestep is set to ${ms_value}"
+                fi
+                ;;
+            rtcSync)
+                rtc_value="$(parse_json "$input_json" "$key")"
+                if [ -n "$rtc_value" ] && [ "$rtc_value" = "false" ]
+                then
+                    sed -i '/^\s*rtcsync\s*$/d' /etc/chrony.conf
+                    echo -e "RTC sync is canseled"
+                else echo -e "RTC sync is set"
+                fi
+                ;;
+            clientsSettings)
+                clients_array=$(echo "$input_json" | jq -c '.clientsSettings')
+                if [ "$clients_array" != "null" ]; then
+                    clients_json="$clients_array"
+
+                    subnet_ips=$(echo "$clients_json" | jq -r '.subnetIpAddresses[]? // empty')
+                    local_stratum=$(echo "$clients_json" | jq -r '.localStratum // empty')
+
+                    for subnet_ip in $subnet_ips; do
+                        if [ -n "$subnet_ip" ]; then
+                            if grep -qE "^\s*#?\s*allow\s+$subnet_ip" /etc/chrony.conf; then
+                                sed -i "s|^\s*#?\s*allow\s\+$subnet_ip.*|allow $subnet_ip|" /etc/chrony.conf
+                            else
+                                sed -i "27i allow $subnet_ip" /etc/chrony.conf
+                            fi
+                        fi
+                    done
+
+                    if [ -n "$local_stratum" ]; then
+                        if grep -qE '^\s*#?\s*local stratum' /etc/chrony.conf; then
+                            sed -i "s|^\s*#\?\s*local stratum.*|local stratum $local_stratum|" /etc/chrony.conf
+                        else
+                            sed -i "29i local stratum $local_stratum" /etc/chrony.conf
+                        fi
+                    fi
+                fi
+                ;;
+            ntpServersSettings)
+                ntp_array=$(echo "$input_json" | jq -c '.ntpServersSettings')
+                if [ "$ntp_array" != "null" ]; then
+                    echo "$ntp_array" | jq -c '.[]' | while read -r ntp_json; do
+                        server_domain=$(echo "$ntp_json" | jq -r '.serverDomainName // empty')
+                        bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
+                        minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
+                        maxpoll=$(echo "$ntp_json" | jq -r '.maxpoll // empty')
+                        no_select=$(echo "$ntp_json" | jq -r '.noSelect // empty')
+                        prefer=$(echo "$ntp_json" | jq -r '.prefer // empty')
+                        offline=$(echo "$ntp_json" | jq -r '.offline // empty')
+                        require=$(echo "$ntp_json" | jq -r '.require // empty')
+                        trust=$(echo "$ntp_json" | jq -r '.trust // empty')
+
+                        ntp_line="server"
+                        [ -n "$server_domain" ] && ntp_line+=" $server_domain"
+                        [ -n "$bursts" ] && ntp_line+=" $bursts"
+                        [ -n "$minpoll" ] && ntp_line+=" minpoll $minpoll"
+                        [ -n "$maxpoll" ] && ntp_line+=" maxpoll $maxpoll"
+                        [ "$no_select" = "true" ] && ntp_line+=" noselect"
+                        [ "$prefer" = "true" ] && ntp_line+=" prefer"
+                        [ "$offline" = "offline" ] && ntp_line+=" offline"
+                        [ "$offline" = "auto offline" ] && ntp_line+=" auto_offline"
+                        [ "$require" = "true" ] && ntp_line+=" require"
+                        [ "$trust" = "true" ] && ntp_line+=" trust"
+
+                        if grep -q "^server $server_domain" /etc/chrony.conf; then
+                            sed -i "s|^server $server_domain.*|$ntp_line|" /etc/chrony.conf
+                        elif grep -q "^server " /etc/chrony.conf; then
+                            last_server_line=$(grep -n "^server " /etc/chrony.conf | tail -n 1 | cut -d: -f1)
+                            sed -i "${last_server_line}a $ntp_line" /etc/chrony.conf
+                        else
+                            sed -i "8i $ntp_line" /etc/chrony.conf
+                        fi
+                        echo "$ntp_line"
+                    done
+                fi
+                ;;
+            ntpPoolsSettings)
+                ntp_array=$(echo "$input_json" | jq -c '.ntpPoolsSettings')
+                if [ "$ntp_array" != "null" ]; then
+                    echo "$ntp_array" | jq -c '.[]' | while read -r ntp_json; do
+                        pool_domain=$(echo "$ntp_json" | jq -r '.poolDomainName // empty')
+                        bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
+                        minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
+                        maxpoll=$(echo "$ntp_json" | jq -r '.maxpoll // empty')
+                        no_select=$(echo "$ntp_json" | jq -r '.noSelect // empty')
+                        prefer=$(echo "$ntp_json" | jq -r '.prefer // empty')
+                        offline=$(echo "$ntp_json" | jq -r '.offline // empty')
+                        require=$(echo "$ntp_json" | jq -r '.require // empty')
+                        trust=$(echo "$ntp_json" | jq -r '.trust // empty')
+                        maxsources=$(echo "$ntp_json" | jq -r '.maxsources // empty')
+
+                        ntp_line="pool"
+                        [ -n "$pool_domain" ] && ntp_line+=" $pool_domain"
+                        [ -n "$bursts" ] && ntp_line+=" $bursts"
+                        [ -n "$minpoll" ] && ntp_line+=" minpoll $minpoll"
+                        [ -n "$maxpoll" ] && ntp_line+=" maxpoll $maxpoll"
+                        [ "$no_select" = "true" ] && ntp_line+=" noselect"
+                        [ "$prefer" = "true" ] && ntp_line+=" prefer"
+                        [ "$offline" = "offline" ] && ntp_line+=" offline"
+                        [ "$offline" = "auto offline" ] && ntp_line+=" auto_offline"
+                        [ "$require" = "true" ] && ntp_line+=" require"
+                        [ "$trust" = "true" ] && ntp_line+=" trust"
+                        [ -n "$maxsources" ] && ntp_line+=" maxsources $maxsources"
+
+                        if grep -q "^pool $pool_domain" /etc/chrony.conf; then
+                            sed -i "s|^pool $pool_domain.*|$ntp_line|" /etc/chrony.conf
+                        elif grep -q "^pool " /etc/chrony.conf; then
+                            last_pool_line=$(grep -n "^pool " /etc/chrony.conf | tail -n 1 | cut -d: -f1)
+                            sed -i "${last_pool_line}a $ntp_line" /etc/chrony.conf                    
+                        else
+                            sed -i "8i $ntp_line" /etc/chrony.conf
+                        fi
+                    done
+                fi
+                ;;
+            ntpDefaultPool)
+                ntp_array=$(echo "$input_json" | jq -c '.ntpDefaultPool')
+                if [ "$ntp_array" != "null" ]; then
+                    ntp_json="$ntp_array"
+                    pool_domain=$(echo "$ntp_json" | jq -r '.poolDomainName // empty')
+                    bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
+                    minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
+                    maxpoll=$(echo "$ntp_json" | jq -r '.maxpoll // empty')
+                    no_select=$(echo "$ntp_json" | jq -r '.noSelect // empty')
+                    prefer=$(echo "$ntp_json" | jq -r '.prefer // empty')
+                    offline=$(echo "$ntp_json" | jq -r '.offline // empty')
+                    require=$(echo "$ntp_json" | jq -r '.require // empty')
+                    trust=$(echo "$ntp_json" | jq -r '.trust // empty')
+                    maxsources=$(echo "$ntp_json" | jq -r '.maxsources // empty')
+
+                    ntp_line="pool"
+                    [ -n "$pool_domain" ] && ntp_line+=" $pool_domain"
+                    [ -n "$bursts" ] && ntp_line+=" $bursts"
+                    [ -n "$minpoll" ] && ntp_line+=" minpoll $minpoll"
+                    [ -n "$maxpoll" ] && ntp_line+=" maxpoll $maxpoll"
+                    [ "$no_select" = "true" ] && ntp_line+=" noselect"
+                    [ "$prefer" = "true" ] && ntp_line+=" prefer"
+                    [ "$offline" = "offline" ] && ntp_line+=" offline"
+                    [ "$offline" = "auto offline" ] && ntp_line+=" auto_offline"
+                    [ "$require" = "true" ] && ntp_line+=" require"
+                    [ "$trust" = "true" ] && ntp_line+=" trust"
+                    [ -n "$maxsources" ] && ntp_line+=" maxsources $maxsources"
+                    
+                    if [ $flag -eq 1 ]; then
+                        sed -i "s|^\(#*\)pool pool\.ntp\.org iburst\$|#${ntp_line}|" /etc/chrony.conf
+                    else
+                        sed -i "s|^\(#*\)pool pool\.ntp\.org iburst\$|\1$ntp_line|" /etc/chrony.conf
+                    fi
+                    sed -i "s|^\(#*\)pool pool\.ntp\.org iburst\$|\1$ntp_line|" /etc/chrony.conf
+                    echo "$ntp_line"
+                    
+                fi
+                ;;
+
+            *)
+               false
+                ;;
+            esac
+    done
+
+            
+ 
+
+    
+    return $retval
 }
 
 case "$MODE" in
     deploy)
-        call_provision || GLOBAL_EXIT=1
+        call_deploy || GLOBAL_EXIT=1
         ;;
+    undeploy)
+        call_undeploy || GLOBAL_EXIT=1
     undeploy)
         call_undeploy || GLOBAL_EXIT=1
         ;;

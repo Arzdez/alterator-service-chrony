@@ -5,16 +5,6 @@ display_name.en = "Chrony service"
 display_name.ru = "Сервис Chrony"
 no_default_diag = true
 
-[parameters.defaultPoll]
-display_name.en = "Default poll"
-display_name.ru = "Пул по умолчанию"
-comment.en = "Disable default poll of NTP servers"
-comment.ru = "Убрать пул серверов NTP по умолчанию"
-type = "boolean"
-context = [
-    "deploy"
-]
-
 [parameters.ntpServersSettings]
 display_name.en = "NTP servers settings"
 display_name.ru = "Настройки серверов NTP"
@@ -23,9 +13,18 @@ context = [
     "deploy",
     "status"
 ]
+required = [
+    "deploy"
+]
 [parameters.ntpServersSettings.properties.serverDomainName]
 display_name.en = "Domain name of NTP server"
 display_name.ru = "Доменное имя сервера NTP"
+type = "array"
+array_type = "string"
+array_min = 1
+[parameters.ntpServersSettings.properties.poolDomainName]
+display_name.en = "Domain name of NTP pool"
+display_name.ru = "Доменное имя пула серверов NTP"
 type = "array"
 array_type = "string"
 array_min = 1
@@ -38,19 +37,50 @@ context = [
     "deploy",
     "status"
 ]
+required = [
+    "deploy"
+]
 [parameters.clientsSettings.properties.localStratum]
 display_name.en = "Local stratum of this server"
 display_name.ru = "Уровень этого сервера"
 type = "integer"
 default = 10
 [parameters.clientsSettings.properties.subnetIpAddresses]
-display_name.en = "IP address of NTP server"
-display_name.ru = "IP адрес сервера NTP"
+display_name.en = "IP address of local subnets"
+display_name.ru = "IP адрес локальных подсетей"
 type = "array"
 array_type = "string"
 array_min = 1
 pattern = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(?:[1-2]?[0-9]|3[0-2])$"
 
+[parameters.makestep]
+display_name.en = "Makestep"
+display_name.ru = "Makestep"
+type = "string"
+default = "1.0 3"
+pattern = "^[0-9]+\\.[0-9]+ [0-9]+$"
+context = [
+    "deploy",
+    "status"
+]
+required = [
+    "deploy"
+]
+
+[parameters.rtcSync]
+display_name.en = "RTC directive"
+display_name.ru = "Директива RTC"
+comment.en = "Copy system time to RTC"
+comment.ru = "Копировать системное время в RTC"
+type = "boolean"
+default = true
+context = [
+    "deploy",
+    "status"
+]
+required = [
+    "deploy"
+]
 
 [resources.chronyConf]
 display_name.en = "Chrony configuring file"

@@ -178,7 +178,7 @@ call_deploy() {
     echo -e "Data is received from stdin"
     
     backup_config /etc/chrony.conf "original" || retval=1
-    
+
     echo "$input_json" > /usr/share/alterator-service-chrony/deployment-config.json || retval=1
 
     keys=$(echo "$input_json" | jq -r 'keys[]')
@@ -563,6 +563,9 @@ call_configure(){
     new_servers=$(echo "$input_json" | jq -r '.ntpServersSettings[]?.serverDomainName // empty')
     for old_server in $old_servers; do
         found=0
+        if [ -z "$new_servers" ]; then
+            break
+        fi
         for new_server in $new_servers; do
             if [ "$old_server" = "$new_server" ]; then
                 found=1
@@ -577,6 +580,9 @@ call_configure(){
     new_pools=$(echo "$input_json" | jq -r '.ntpPoolsSettings[]?.poolDomainName // empty')
     for old_pool in $old_pools; do
         found=0
+        if [ -z "$new_pools" ]; then
+            break
+        fi
         for new_pool in $new_pools; do
             if [ "$old_pool" = "$new_pool" ]; then
                 found=1
@@ -595,6 +601,9 @@ call_configure(){
     new_subnets=$(echo "$input_json" | jq -r '.clientsSettings.subnetIpAddresses[]? // empty')
     for old_subnet in $old_subnets; do
         found=0
+        if [ -z "$new_subnets" ]; then
+            break
+        fi
         for new_subnet in $new_subnets; do
             if [ "$old_subnet" = "$new_subnet" ]; then
                 found=1     

@@ -294,6 +294,21 @@ required = [
     "deploy"
 ]
 
+[parameters.backupName]
+display_name.en = "Name of backup"
+display_name.ru = "Имя резервной копии"
+comment.en = "Your backup is saved in the /etc/share/alterator-service-chrony/config-backup/ folder."
+comment.ru = "Ваша резервная копия сохраняется в папке /etc/share/alterator-service-chrony/config-backup/"
+type = "string"
+context = [
+    "backup",
+    "restore"
+]
+required = [
+    "backup",
+    "restore"
+]
+
 [resources.chronyConf]
 display_name.en = "Chrony configuring file"
 display_name.ru = "Конфигурационный файл Chrony"

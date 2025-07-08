@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Samba active directory provision
-# Tool for provision samba active directory
+# Chrony service provision
+# Tool for provision chrony service
 #
-# Copyright (C) 2024 Evgenii Sozonov <arzdez@altlinux.org>
+# Copyright (C) 2025 Mukhin Michael
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -94,6 +94,24 @@ while :; do
     shift
 done
 
+validate_json(){
+    local input_json="$1"
+    local mode_value="$2"
+    local retval=0
+    local path_to_schema=
+    path_to_schema=
+
+    jsonschema "$path_to_schema" <<< $input_json &>/dev/null || retval=1
+
+    return $retval
+}
+
+get_json_value() {
+    local json="$1"
+    local key="$2"
+    local path="${3:-.}"
+    echo "$json" | jq -r --arg k "$key" "$path.[\$k]" 2>/dev/null
+}
 
 backup_config() {
     local config_file="$1"
@@ -191,11 +209,9 @@ call_deploy() {
                 fi
                 ;;
             ntpServersSettings)
-                #ntp_servers=$(echo "$input_json" | jq -r '.ntpServersSettings | keys[]?')
                 ntp_array=$(echo "$input_json" | jq -c '.ntpServersSettings')
                 if [ "$ntp_array" != "null" ]; then
                     echo "$ntp_array" | jq -c '.[]' | while read -r ntp_json; do
-                        # Обрабатываем каждый объект JSON по отдельности
                         server_domain=$(echo "$ntp_json" | jq -r '.serverDomainName // empty')
                         bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
                         minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
@@ -227,7 +243,6 @@ call_deploy() {
                 ntp_array=$(echo "$input_json" | jq -c '.ntpPoolsSettings')
                 if [ "$ntp_array" != "null" ]; then
                     echo "$ntp_array" | jq -c '.[]' | while read -r ntp_json; do
-                        # Обрабатываем каждый объект JSON по отдельности
                         pool_domain=$(echo "$ntp_json" | jq -r '.poolDomainName // empty')
                         bursts=$(echo "$ntp_json" | jq -r '.bursts // empty')
                         minpoll=$(echo "$ntp_json" | jq -r '.minpoll // empty')
@@ -430,7 +445,7 @@ call_undeploy(){
     local retval=0
     local backup_dir="/usr/share/alterator-service-chrony/config-backup"
     echo "Demoting in progress..."
-    backup_config /etc/chrony.conf "before_demote" 1 || retval=1
+    backup_config /etc/chrony.conf "before_demote" || retval=1
     echo "Creating backup of the current configuration file"
     
     rm -f /usr/share/alterator-service-chrony/deployment-config.json
@@ -473,13 +488,65 @@ call_status() {
 }
 
 call_backup(){
-    echo "service is not bombom right now"
-    return 0
+    local retval=0
+    local input_json=
+    
+    input_json="$(read_stdin)"
+
+    keys=$(echo "$input_json" | jq -r 'keys[]')
+    for key in $keys; do
+        case "$key" in
+            backupName)
+                backup_name="$(parse_json "$input_json" "$key")"
+                if [ -z "$backup_name" ]; then
+                    echo "Backup name is empty, exiting."
+                    retval=1
+                else backup_config "/etc/chrony.conf" "$backup_name" || retval=1
+                    echo "Backup of the configuration file created with name: $backup_name"
+                fi
+                ;;
+            *)
+                echo "Unrecognized key: $key"
+                retval=1
+                ;;
+        esac
+    done
+
+    return $retval
 }
 
 call_restore(){
-    echo "service is not bombom right now"
-    return 0
+    local retval=0
+    local input_json=
+    local backup_dir="/usr/share/alterator-service-chrony/config-backup"
+    input_json="$(read_stdin)"
+
+    keys=$(echo "$input_json" | jq -r 'keys[]')
+    for key in $keys; do
+        case "$key" in
+            backupName)
+                backup_name="$(parse_json "$input_json" "$key")"
+                if [ -z "$backup_name" ]; then
+                    echo "Backup name is empty, exiting."
+                    retval=1
+                elif [ ! -f "/usr/share/alterator-service-chrony/config-backup/chrony.conf.$backup_name" ]; then
+                    echo "Backup file /usr/share/alterator-service-chrony/config-backup/chrony.conf.$backup_name does not exist."
+                    retval=1
+                else
+                    cp -f "$backup_dir/chrony.conf.$backup_name" /etc/chrony.conf
+                    chmod 644 /etc/chrony.conf
+                    echo "Restored original configuration file from backup."
+                fi
+
+                ;;
+            *)
+                echo "Unrecognized key: $key"
+                retval=1
+                ;;
+        esac
+    done
+
+    return $retval
 }
 
 call_configure(){
@@ -723,10 +790,6 @@ call_configure(){
             esac
     done
 
-            
- 
-
-    
     return $retval
 }
 

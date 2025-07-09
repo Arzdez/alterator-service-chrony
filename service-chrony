@@ -28,6 +28,27 @@ set -euo pipefail
 . shell-getopt
 . shell-ini-config
 
+show_usage() {
+    cat <<EOF
+Usage: $PROG_NAME [OPTIONS]
+
+Tool for managing the chrony service.
+
+Options:
+    -h, --help            Show this help message and exit
+    -v, --version         Show version information and exit
+    -u, --undeploy        Undeploy the chrony service
+    -d, --deploy          Deploy the chrony service
+    -r, --restore         Restore the chrony service configuration from backup
+    -b, --backup          Create a backup of the chrony service configuration
+    -s, --status          Show the current status of the chrony service
+        --start           Start the chrony service
+        --stop            Stop the chrony service
+        --configure       Configure the chrony service
+EOF
+    exit 0
+}
+
 
 PROG_NAME="${0##*/}"
 VERSION="0.1"
@@ -563,9 +584,6 @@ call_configure(){
     new_servers=$(echo "$input_json" | jq -r '.ntpServersSettings[]?.serverDomainName // empty')
     for old_server in $old_servers; do
         found=0
-        if [ -z "$new_servers" ]; then
-            break
-        fi
         for new_server in $new_servers; do
             if [ "$old_server" = "$new_server" ]; then
                 found=1
@@ -578,32 +596,37 @@ call_configure(){
     done
     old_pools=$(grep -E '^pool[[:space:]]' /etc/chrony.conf | awk '{print $2}')
     new_pools=$(echo "$input_json" | jq -r '.ntpPoolsSettings[]?.poolDomainName // empty')
-    for old_pool in $old_pools; do
-        found=0
-        if [ -z "$new_pools" ]; then
-            break
-        fi
-        for new_pool in $new_pools; do
-            if [ "$old_pool" = "$new_pool" ]; then
-                found=1
-                break
-            elif [ "$old_pool" = "pool.ntp.org" ]; then
-                found=1
-                break
+    
+    if [ -z "$new_pools" ]; then
+        for old_pool in $old_pools; do
+            if [ "$old_pool" = "pool.ntp.org" ]; then
+                continue
+            else
+                sed -i "/^pool[[:space:]]\+$old_pool\b.*/d" /etc/chrony.conf
             fi
         done
-        if [ $found -eq 0 ] && [ -n "$old_pool" ]; then
-            sed -i "/^pool[[:space:]]\+$old_pool\b.*/d" /etc/chrony.conf
-        fi
-    done
+    else
+        for old_pool in $old_pools; do
+            found=0
+            for new_pool in $new_pools; do
+                if [ "$old_pool" = "$new_pool" ]; then
+                    found=1
+                    break
+                elif [ "$old_pool" = "pool.ntp.org" ]; then
+                    found=1
+                    break
+                fi
+            done
+            if [ $found -eq 0 ] && [ -n "$old_pool" ]; then
+                sed -i "/^pool[[:space:]]\+$old_pool\b.*/d" /etc/chrony.conf
+            fi
+        done
+    fi
 
     old_subnets=$(grep -E '^allow[[:space:]]' /etc/chrony.conf | awk '{print $2}')
     new_subnets=$(echo "$input_json" | jq -r '.clientsSettings.subnetIpAddresses[]? // empty')
     for old_subnet in $old_subnets; do
         found=0
-        if [ -z "$new_subnets" ]; then
-            break
-        fi
         for new_subnet in $new_subnets; do
             if [ "$old_subnet" = "$new_subnet" ]; then
                 found=1     

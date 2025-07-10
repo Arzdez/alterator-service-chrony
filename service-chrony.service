@@ -18,6 +18,8 @@ context = [
 [parameters.ntpServersSettings]
 display_name.en = "NTP servers settings"
 display_name.ru = "Настройки серверов NTP"
+comment.ru = "Позволяют добавлять параметры, регулирующие работу серверов"
+comment.en = "Allows you to add parameters that regulate the operation of servers"
 type = "array"
 array_type = "object"
 prototype = "ntpServer"
@@ -33,6 +35,8 @@ required = [
 [parameters.ntpPoolsSettings]
 display_name.en = "Settings of NTP pools"
 display_name.ru = "Настройки пулов серверов NTP"
+comment.ru = "Позволяют добавлять параметры, регулирующие работу пулов"
+comment.en = "Allows you to add parameters that regulate the operation of pools"
 type = "array"
 array_type = "object"
 prototype = "ntpPool"
@@ -58,6 +62,8 @@ required = true
 [parameters.ntpServer.properties.bursts]
 display_name.en = "burst/iburst"
 display_name.ru = "burst/iburst"
+comment.ru = "Отправляет пакет из 8 запросов (ibusrt) или 4 запросов (burst), когда от сервера не удается получить данные"
+comment.en = "Sends a packet of 8 requests (ibusrt) or 4 requests (burst) when data cannot be received from the server"
 type = "enum"
 values = ["burst", "iburst"]
 default = "iburst"
@@ -65,6 +71,8 @@ required = true
 [parameters.ntpServer.properties.minpoll]
 display_name.en = "Minpoll"
 display_name.ru = "Minpoll"
+comment.ru = "Минимальный интервал между запросами на сервер. Степень 2 в секунду"
+comment.en = "Minimum interval between requests on the server. Power of 2 per second" 
 type = "integer"
 min = -7
 max = 24
@@ -72,6 +80,8 @@ required = false
 [parameters.ntpServer.properties.maxpoll]
 display_name.en = "Maxpoll"
 display_name.ru = "Maxpoll"
+comment.ru = "Максимальный интервал между запросами на сервер. Степень 2 в секунду"
+comment.en = "Maximum interval between requests on the server. Power of 2 per second" 
 type = "integer"
 min = -7
 max = 24
@@ -116,6 +126,8 @@ required = true
 [parameters.ntpPool.properties.bursts]
 display_name.en = "burst/iburst"
 display_name.ru = "burst/iburst"
+comment.ru = "Отправляет пакет из 8 запросов (ibusrt) или 4 запросов (burst), когда от сервера не удается получить данные"
+comment.en = "Sends a packet of 8 requests (ibusrt) or 4 requests (burst) when data cannot be received from the server"
 type = "enum"
 values = ["burst", "iburst"]
 default = "iburst"
@@ -123,6 +135,8 @@ required = true
 [parameters.ntpPool.properties.maxsources]
 display_name.en = "Maxsources"
 display_name.ru = "Maxsources"
+comment.ru = "Максимальное количество серверов, выбираемых из этого пула. От 1 до 16"
+comment.en = "The maximum number of servers to select from this pool. From 1 to 16" 
 type = "integer"
 min = 1
 max = 16
@@ -130,6 +144,8 @@ default = 4
 [parameters.ntpPool.properties.minpoll]
 display_name.en = "Minpoll"
 display_name.ru = "Minpoll"
+comment.ru = "Минимальный интервал между запросами на сервер. Степень 2 в секунду"
+comment.en = "Minimum interval between requests on the server. Power of 2 per second" 
 type = "integer"
 min = -7
 max = 24
@@ -137,6 +153,8 @@ required = false
 [parameters.ntpPool.properties.maxpoll]
 display_name.en = "Maxpoll"
 display_name.ru = "Maxpoll"
+comment.ru = "Максимальный интервал между запросами на сервер. Степень 2 в секунду"
+comment.en = "Maximum interval between requests on the server. Power of 2 per second" 
 type = "integer"
 min = -7
 max = 24
@@ -178,15 +196,11 @@ context = [
     "deploy", 
     "configure" 
 ]
-[parameters.ntpDefaultPool.properties.poolDomainName]
-display_name.en = "Domain name of NTP pool"
-display_name.ru = "Доменное имя пула NTP"
-type = "string"
-default = "pool.ntp.org"
-required = true
 [parameters.ntpDefaultPool.properties.bursts]
 display_name.en = "burst/iburst"
 display_name.ru = "burst/iburst"
+comment.ru = "Отправляет пакет из 8 запросов (ibusrt) или 4 запросов (burst), когда от сервера не удается получить данные"
+comment.en = "Sends a packet of 8 requests (ibusrt) or 4 requests (burst) when data cannot be received from the server"
 type = "enum"
 values = ["burst", "iburst"]
 default = "iburst"
@@ -194,6 +208,8 @@ required = true
 [parameters.ntpDefaultPool.properties.maxsources]
 display_name.en = "Maxsources"
 display_name.ru = "Maxsources"
+comment.ru = "Максимальное количество серверов, выбираемых из этого пула. От 1 до 16"
+comment.en = "The maximum number of servers to select from this pool. From 1 to 16" 
 type = "integer"
 min = 1
 max = 16
@@ -201,6 +217,8 @@ default = 4
 [parameters.ntpDefaultPool.properties.minpoll]
 display_name.en = "Minpoll"
 display_name.ru = "Minpoll"
+comment.ru = "Минимальный интервал между запросами на сервер. Степень 2 в секунду"
+comment.en = "Minimum interval between requests on the server. Power of 2 per second" 
 type = "integer"
 min = -7
 max = 24
@@ -208,6 +226,8 @@ required = false
 [parameters.ntpDefaultPool.properties.maxpoll]
 display_name.en = "Maxpoll"
 display_name.ru = "Maxpoll"
+comment.ru = "Максимальный интервал между запросами на сервер. Степень 2 в секунду"
+comment.en = "Maximum interval between requests on the server. Power of 2 per second" 
 type = "integer"
 min = -7
 max = 24
@@ -215,6 +235,8 @@ required = false
 [parameters.ntpDefaultPool.properties.offline]
 display_name.en = "Offline mode"
 display_name.ru = "Режим оффлайн"
+comment.ru = "offline сразу отмечает сервер не доступен, auto offline сделает сервер недоступным при сбое отправки запроса" 
+comment.en = "offline immediately marks the server as unavailable, auto offline will make the server unavailable if the request fails"
 type = "enum"
 required = false
 values = ["offline", "auto offline"]
@@ -242,6 +264,7 @@ required = false
 [parameters.clientsSettings]
 display_name.en = "Clients subnets settings"
 display_name.ru = "Настройка клиентских подсетей"
+comment.ru = "Позволяет добавить локальные подсети, из которых можно использовать данный сервер как сервер NTP"
 type = "object"
 context = [
     "status",
@@ -264,8 +287,8 @@ pattern = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][
 [parameters.makestep]
 display_name.en = "Makestep"
 display_name.ru = "Makestep"
-comment.en = "The first number is a float, the second is an integer"
-comment.ru = "Первое число с плавающей точкой, второе - целое"
+comment.en = "This directive forces chronyd to step the system clock. The first number is a float, the second is an integer"
+comment.ru = "Эта директива заставляет chronyd пошагово корректировать системные часы. Первое число с плавающей точкой, второе - целое"
 type = "string"
 default = "1.0 3"
 pattern = "^[0-9]+\\.[0-9]+ [0-9]+$"
@@ -320,4 +343,3 @@ display_name.en = "Chronyd service"
 display_name.ru = "Сервис chronyd"
 type = "systemd_unit"
 unit_name.value = "chronyd.service"
-

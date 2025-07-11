@@ -343,3 +343,11 @@ display_name.en = "Chronyd service"
 display_name.ru = "Сервис chronyd"
 type = "systemd_unit"
 unit_name.value = "chronyd.service"
+
+[resources.ntp]
+display_name.en = "NTP port"
+display_name.ru = "NTP порт"
+type = "port"
+inet_service.value = 123
+tcp = false
+udp = true
